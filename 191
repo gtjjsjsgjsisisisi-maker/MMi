@@ -1,0 +1,250 @@
+-- [[ YOU SHOP HUB - Delta Mobile Complete Version ]] --
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "YOU SHOP Hub",
+   LoadingTitle = "กำลังโหลด YOU SHOP...",
+   LoadingSubtitle = "by YOU SHOP",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false
+})
+
+local MainTab = Window:CreateTab("เคลื่อนที่ & ตัวละคร", 4483345998)
+local CombatTab = Window:CreateTab("ต่อสู้ & ESP", 4483345998)
+
+local LocalPlayer = game.Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- 1. กระโดดไม่จำกัด (Infinite Jump)
+local InfJumpEnabled = false
+UserInputService.JumpRequest:Connect(function()
+    if InfJumpEnabled then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChildOfClass("Humanoid") then
+            char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+MainTab:CreateToggle({
+   Name = "กระโดดไม่จำกัด (Infinite Jump)",
+   CurrentValue = false,
+   Flag = "InfJump",
+   Callback = function(Value) InfJumpEnabled = Value end,
+})
+
+-- 2. วิ่งไว (Speed Boost)
+local SpeedEnabled = false
+local WalkSpeedValue = 50
+
+MainTab:CreateToggle({
+   Name = "เปิดระบบวิ่งไว (Speed Boost)",
+   CurrentValue = false,
+   Flag = "SpeedToggle",
+   Callback = function(Value)
+      SpeedEnabled = Value
+      local char = LocalPlayer.Character
+      if char and char:FindFirstChildOfClass("Humanoid") then
+          char:FindFirstChildOfClass("Humanoid").WalkSpeed = SpeedEnabled and WalkSpeedValue or 16
+      end
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "ปรับระดับความเร็ว (Speed Level)",
+   Range = {16, 200},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 50,
+   Flag = "SpeedSlider",
+   Callback = function(Value)
+      WalkSpeedValue = Value
+      if SpeedEnabled then
+          local char = LocalPlayer.Character
+          if char and char:FindFirstChildOfClass("Humanoid") then
+              char:FindFirstChildOfClass("Humanoid").WalkSpeed = WalkSpeedValue
+          end
+      end
+   end,
+})
+
+-- 3. บิน (Fly)
+local Flying = false
+local FlySpeed = 50
+
+MainTab:CreateToggle({
+   Name = "ระบบบิน (Fly)",
+   CurrentValue = false,
+   Flag = "FlyToggle",
+   Callback = function(Value)
+        Flying = Value
+        local Char = LocalPlayer.Character
+        if not Char then return end
+        local HRP = Char:FindFirstChild("HumanoidRootPart")
+        if not HRP then return end
+
+        if Flying then
+            local BV = Instance.new("BodyVelocity")
+            local BG = Instance.new("BodyGyro")
+            BV.Name = "YOUShop_FlyBV"
+            BG.Name = "YOUShop_FlyBG"
+            BV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            BG.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+            BV.Parent = HRP
+            BG.Parent = HRP
+
+            task.spawn(function()
+                while Flying and HRP and HRP.Parent do
+                    BG.CFrame = Camera.CFrame
+                    local direction = Vector3.zero
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction = direction + Camera.CFrame.LookVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction = direction - Camera.CFrame.LookVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction = direction - Camera.CFrame.RightVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction = direction + Camera.CFrame.RightVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then direction = direction + Vector3.new(0, 1, 0) end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction - Vector3.new(0, 1, 0) end
+
+                    BV.Velocity = direction * FlySpeed
+                    task.wait()
+                end
+                if HRP:FindFirstChild("YOUShop_FlyBV") then HRP.YOUShop_FlyBV:Destroy() end
+                if HRP:FindFirstChild("YOUShop_FlyBG") then HRP.YOUShop_FlyBG:Destroy() end
+            end)
+        else
+            if HRP:FindFirstChild("YOUShop_FlyBV") then HRP.YOUShop_FlyBV:Destroy() end
+            if HRP:FindFirstChild("YOUShop_FlyBG") then HRP.YOUShop_FlyBG:Destroy() end
+        end
+   end,
+})
+
+-- 4. ล่องหน (Invisibility)
+local Invisible = false
+
+MainTab:CreateToggle({
+   Name = "ล่องหน (Invisibility)",
+   CurrentValue = false,
+   Flag = "InvisToggle",
+   Callback = function(Value)
+      Invisible = Value
+      local Char = LocalPlayer.Character
+      if Char then
+          for _, part in pairs(Char:GetDescendants()) do
+              if part:IsA("BasePart") or part:IsA("Decal") then
+                  part.Transparency = Invisible and 1 or 0
+              end
+          end
+      end
+   end,
+})
+
+-- 5. ล็อกหัว (Aimbot)
+local AimbotEnabled = false
+
+local function GetClosestEnemyHead()
+    local closestHead = nil
+    local shortestDistance = math.huge
+
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local isTeammate = (LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team)
+            if not isTeammate then
+                local head = player.Character.Head
+                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                    local distance = (Vector2.new(pos.X, pos.Y) - screenCenter).Magnitude
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        closestHead = head
+                    end
+                end
+            end
+        end
+    end
+    return closestHead
+end
+
+RunService.RenderStepped:Connect(function()
+    if AimbotEnabled then
+        local targetHead = GetClosestEnemyHead()
+        if targetHead then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHead.Position)
+        end
+    end
+end)
+
+CombatTab:CreateToggle({
+   Name = "ล็อกหัวศัตรูอัตโนมัติ (Aimbot Head)",
+   CurrentValue = false,
+   Flag = "AimbotToggle",
+   Callback = function(Value)
+      AimbotEnabled = Value
+   end,
+})
+
+-- 6. มองทะลุแยกทีม (ESP: เพื่อน = เขียว / ศัตรู = แดง)
+local ESPEnabled = false
+
+local function GetTeamColor(player)
+    if LocalPlayer.Team and player.Team then
+        if player.Team == LocalPlayer.Team then
+            return Color3.fromRGB(0, 255, 0) -- เขียว (ทีมเดียวกัน)
+        else
+            return Color3.fromRGB(255, 0, 0) -- แดง (ศัตรู)
+        end
+    else
+        return Color3.fromRGB(255, 0, 0) -- ไม่มีระบบทีม ถือเป็นศัตรูทั้งหมด
+    end
+end
+
+local function ApplyESP(player)
+    if player ~= LocalPlayer and player.Character then
+        local existingHighlight = player.Character:FindFirstChild("YOUShop_ESP")
+        if ESPEnabled then
+            local targetColor = GetTeamColor(player)
+            if not existingHighlight then
+                local hl = Instance.new("Highlight")
+                hl.Name = "YOUShop_ESP"
+                hl.FillColor = targetColor
+                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                hl.FillTransparency = 0.4
+                hl.Parent = player.Character
+            else
+                existingHighlight.FillColor = targetColor
+            end
+        else
+            if existingHighlight then
+                existingHighlight:Destroy()
+            end
+        end
+    end
+end
+
+CombatTab:CreateToggle({
+   Name = "มองทะลุแยกสี (เพื่อนเขียว / ศัตรูแดง)",
+   CurrentValue = false,
+   Flag = "ESPToggle",
+   Callback = function(Value)
+      ESPEnabled = Value
+      for _, player in pairs(game.Players:GetPlayers()) do
+          ApplyESP(player)
+      end
+   end,
+})
+
+RunService.Stepped:Connect(function()
+    if ESPEnabled then
+        for _, player in pairs(game.Players:GetPlayers()) do
+            ApplyESP(player)
+        end
+    end
+end)
+
+Rayfield:Notify({
+   Title = "YOU SHOP",
+   Content = "โหลดระบบ ล็อกหัว / บิน / ล่องหน / ESP แยกสี เรียบร้อย!",
+   Duration = 4,
+   Image = 4483345998,
+})
