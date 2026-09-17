@@ -1,0 +1,156 @@
+import discord
+from discord.ext import commands
+from discord import ui
+import aiohttp
+
+# --------------------------------------------------
+# 🖼️ ตั้งค่าลิงก์รูปภาพตรงกลาง UI (ใส่ Direct Link เช่น Imgur, Discord CDN)
+# --------------------------------------------------
+BANNER_URL = "https://i.imgur.com/8N4Zf93.png"  # << เปลี่ยนเป็นลิงก์รูปของคุณที่นี่
+
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+DEFAULT_SCRIPTS = {
+    "blox fruits": [
+        {
+            "title": "REDz Hub (Auto Farm / Sea 1-3)",
+            "script": 'loadstring(game:HttpGet("https://raw.githubusercontent.com/REDzHUB/BloxFruits/main/redz9999"))()',
+            "key": False,
+            "game": "Blox Fruits"
+        }
+    ]
+}
+
+async def get_scripts(query: str):
+    q_lower = query.lower().strip()
+    results = []
+
+    for game_key, scripts in DEFAULT_SCRIPTS.items():
+        if game_key in q_lower or q_lower in game_key:
+            results.extend(scripts)
+
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        url = f"https://scriptblox.com/api/script/search?q={query}&max=5"
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    raw_scripts = data.get("result", {}).get("scripts", [])
+                    for item in raw_scripts:
+                        title = item.get("title", "No Title")
+                        slug = item.get("slug", "")
+                        script_text = item.get("script", "")
+                        has_key = item.get("key", False)
+                        game_info = item.get("game", {})
+                        g_name = game_info.get("name", "Roblox Game") if isinstance(game_info, dict) else "Roblox Game"
+
+                        if not script_text or len(script_text) < 5:
+                            if slug:
+                                script_text = f'loadstring(game:HttpGet("https://scriptblox.com/raw/{slug}"))()'
+                            else:
+                                continue
+
+                        results.append({
+                            "title": title,
+                            "script": script_text,
+                            "key": has_key,
+                            "game": g_name
+                        })
+    except Exception:
+        pass
+
+    return results
+
+class ScriptSearchModal(ui.Modal, title="🔎 ค้นหาสคริปต์ Roblox"):
+    map_name = ui.TextInput(
+        label="ชื่อแมพ หรือชื่อเกม",
+        placeholder="เช่น Blox Fruits, King Legacy, MM2...",
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        search_query = self.map_name.value.strip()
+
+        scripts = await get_scripts(search_query)
+
+        if not scripts:
+            await interaction.followup.send(f"❌ ไม่พบสคริปต์สำหรับ: **{search_query}**", ephemeral=True)
+            return
+
+        select = ui.Select(placeholder="เลือกสคริปต์ที่ต้องการ...")
+
+        for i, script in enumerate(scripts[:10]):
+            title = script["title"][:40]
+            has_key = "🔑 มีคีย์" if script["key"] else "✅ ไม่มีคีย์"
+            game_name = script["game"][:15]
+
+            select.add_option(
+                label=f"{i+1}. {title}",
+                description=f"เกม: {game_name} | {has_key}",
+                value=str(i)
+            )
+
+        async def select_callback(select_interaction: discord.Interaction):
+            idx = int(select.values[0])
+            chosen = scripts[idx]
+
+            s_title = chosen["title"]
+            s_code = chosen["script"]
+            is_key = chosen["key"]
+            key_status = "🔴 **มีคีย์ (Requires Key)**" if is_key else "🟢 **ไม่มีคีย์ (No Key / Free)**"
+
+            embed = discord.Embed(
+                title=f"📜 {s_title}",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="🔑 สถานะคีย์", value=key_status, inline=False)
+            embed.add_field(name="💻 โค้ดสคริปต์ (นำไปวางใน Executor)", value=f"```lua\n{s_code}\n```", inline=False)
+            
+            # 🖼️ ใส่รูปตรงกลาง Embed ผลลัพธ์
+            embed.set_image(url=BANNER_URL)
+
+            await select_interaction.response.send_message(embed=embed, ephemeral=True)
+
+        select.callback = select_callback
+        view = ui.View()
+        view.add_item(select)
+
+        embed = discord.Embed(
+            title=f"🔎 ผลการค้นหา: {search_query}",
+            description=f"พบทั้งหมด **{len(scripts)}** รายการ โปรดเลือกสคริปต์จากเมนูด้านล่าง",
+            color=discord.Color.blue()
+        )
+        # 🖼️ ใส่รูปตรงกลาง Embed เมนูเลือก
+        embed.set_image(url=BANNER_URL)
+        
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+class MainMenuView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="ค้นหาสคริปต์", style=discord.ButtonStyle.success, emoji="🔎")
+    async def open_search_modal(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(ScriptSearchModal())
+
+@bot.command(name="โรบูด")
+async def robud(ctx):
+    embed = discord.Embed(
+        title="🤖 ระบบค้นหาสคริปต์ Roblox",
+        description="กดปุ่ม **\"ค้นหาสคริปต์\"** ด้านล่างเพื่อพิมพ์ชื่อแมพที่ต้องการ",
+        color=discord.Color.gold()
+    )
+    # 🖼️ คำสั่งใส่รูปภาพขนาดใหญ่ตรงกลาง UI หน้าหลัก
+    embed.set_image(url=BANNER_URL)
+
+    await ctx.send(embed=embed, view=MainMenuView())
+
+@bot.event
+async def on_ready():
+    print(f"✅ บอทพร้อมใช้งานแล้วในชื่อ: {bot.user.name}")
+
+bot.run("YOUR_BOT_TOKEN_HERE")
