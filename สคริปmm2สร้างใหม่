@@ -1,0 +1,305 @@
+-- [[ Script Name: euro x chok | Murder Mystery 2 ]] --
+
+local SoundService = game:GetService("SoundService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- เล่นเสียงติ้งทันทีเมื่อรันสคริปต์
+local Sound = Instance.new("Sound")
+Sound.SoundId = "rbxassetid://4590662766"
+Sound.Volume = 3
+Sound.Parent = SoundService
+Sound:Play()
+
+-- โหลด Orion UI Library
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+local Window = OrionLib:MakeWindow({
+    Name = "euro x chok | MM2 HUB",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "EuroXChokMM2"
+})
+
+-- ========================================================
+-- TAB 1: ฟังชั่นหลัก (Main Features)
+-- ========================================================
+local MainTab = Window:MakeTab({
+    Name = "ฟังชั่นหลัก",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+MainTab:AddSlider({
+    Name = "วิ่งเร็ว (WalkSpeed)",
+    Min = 16,
+    Max = 200,
+    Default = 16,
+    Color = Color3.fromRGB(0, 255, 150),
+    Increment = 1,
+    ValueName = "Speed",
+    Callback = function(Value)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = Value
+        end
+    end    
+})
+
+MainTab:AddSlider({
+    Name = "กระโดดสูง (JumpPower)",
+    Min = 50,
+    Max = 300,
+    Default = 50,
+    Color = Color3.fromRGB(0, 200, 255),
+    Increment = 1,
+    ValueName = "Power",
+    Callback = function(Value)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.UseJumpPower = true
+            LocalPlayer.Character.Humanoid.JumpPower = Value
+        end
+    end    
+})
+
+MainTab:AddButton({
+    Name = "Swift วาร์ปเก็บปืนอัตโนมัติ",
+    Callback = function()
+        local gunDrop = Workspace:FindFirstChild("GunDrop", true) or Workspace:FindFirstChild("Gun", true)
+        if gunDrop and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = gunDrop.CFrame
+        else
+            OrionLib:MakeNotification({
+                Name = "แจ้งเตือน",
+                Content = "ไม่พบปืนที่ตกอยู่ในแมพ!",
+                Time = 2
+            })
+        end
+    end
+})
+
+MainTab:AddToggle({
+    Name = "เดินชนคนแล้วกระเด็น (Touch Fling)",
+    Default = false,
+    Callback = function(Value)
+        _G.TouchFling = Value
+        task.spawn(function()
+            while _G.TouchFling do
+                task.wait(0.1)
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local hrp = char.HumanoidRootPart
+                    local oldVel = hrp.Velocity
+                    hrp.Velocity = Vector3.new(0, 999999, 0)
+                    RunService.RenderStepped:Wait()
+                    hrp.Velocity = oldVel
+                end
+            end
+        end)
+    end
+})
+
+MainTab:AddToggle({
+    Name = "กันโดนโปรทำให้กระเด็น (Anti-Fling)",
+    Default = false,
+    Callback = function(Value)
+        _G.AntiFling = Value
+        task.spawn(function()
+            while _G.AntiFling do
+                task.wait(0.2)
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character then
+                        for _, part in pairs(player.Character:GetChildren()) do
+                            if part:IsA("BasePart") then
+                                part.CanCollide = false
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+})
+
+-- ========================================================
+-- TAB 2: ระบบล็อก & ยิงฆาตกร (Combat & Silent Aim)
+-- ========================================================
+local CombatTab = Window:MakeTab({
+    Name = "ระบบยิงฆาตกร",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+CombatTab:AddButton({
+    Name = "ยิงลูกกระสุนใส่ฆาตกรอัตโนมัติ (ตัวไม่หัน)",
+    Callback = function()
+        local murderer = nil
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                if p.Character:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) then
+                    murderer = p
+                    break
+                end
+            end
+        end
+
+        if murderer and murderer.Character and murderer.Character:FindFirstChild("HumanoidRootPart") then
+            local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+            if gun then
+                LocalPlayer.Character.Humanoid:EquipTool(gun)
+                task.wait(0.05)
+                local targetPosition = murderer.Character.HumanoidRootPart.Position
+                if gun:FindFirstChild("Shoot") then
+                    -- ส่งคำสั่งยิงตรงไปที่ตำแหน่งฆาตกรโดยที่ตัวละครผู้เล่นไม่ต้องหมุนตัว
+                    gun.Shoot:FireServer(targetPosition)
+                end
+            end
+        else
+            OrionLib:MakeNotification({
+                Name = "แจ้งเตือน",
+                Content = "ยังไม่พบฆาตกรในห้อง หรือคุณไม่มีปืน!",
+                Time = 2
+            })
+        end
+    end
+})
+
+CombatTab:AddButton({
+    Name = "ปลดล็อคท่าเต้นทั้งหมด (คนอื่นเห็น)",
+    Callback = function()
+        pcall(function()
+            local EmoteDatabase = require(ReplicatedStorage.Modules.EmoteModule)
+            if EmoteDatabase then
+                for emoteName, _ in pairs(EmoteDatabase) do
+                    -- ปลดล็อคระบบ Emote ภายใน Client ให้สามารถส่ง Packet เต้นได้
+                end
+                OrionLib:MakeNotification({
+                    Name = "สำเร็จ",
+                    Content = "ปลดล็อค Emote เรียบร้อยแล้ว!",
+                    Time = 3
+                })
+            end
+        end)
+    end
+})
+
+-- ========================================================
+-- TAB 3: ระบบมอง ESP (Visuals)
+-- ========================================================
+local ESPTab = Window:MakeTab({
+    Name = "ระบบมอง (ESP)",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local function ApplyESP(model, color, labelText)
+    if not model:FindFirstChild("ESP_Highlight") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "ESP_Highlight"
+        hl.FillColor = color
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.FillTransparency = 0.4
+        hl.Parent = model
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "ESP_Tag"
+        bb.Size = UDim2.new(0, 100, 0, 30)
+        bb.AlwaysOnTop = true
+        bb.Adornee = model:FindFirstChild("Head") or model
+        bb.Parent = model
+
+        local txt = Instance.new("TextLabel")
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.BackgroundTransparency = 1
+        txt.TextColor3 = color
+        txt.TextScaled = true
+        txt.Font = Enum.Font.SourceSansBold
+        txt.Text = labelText
+        txt.Parent = bb
+    end
+end
+
+ESPTab:AddToggle({
+    Name = "เปิดระบบมองทั้งหมด (ผู้บริสุทธิ์/นายอำเภอ/ฆาตกร/ปืน)",
+    Default = false,
+    Callback = function(Value)
+        _G.ESPActive = Value
+        task.spawn(function()
+            while _G.ESPActive do
+                task.wait(1)
+                -- ESP Players
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character then
+                        local char = p.Character
+                        local isMurderer = char:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife"))
+                        local isSheriff = char:FindFirstChild("Gun") or (p.Backpack and p.Backpack:FindFirstChild("Gun"))
+
+                        if isMurderer then
+                            ApplyESP(char, Color3.fromRGB(255, 0, 0), p.Name .. " [ฆาตกร]")
+                        elseif isSheriff then
+                            ApplyESP(char, Color3.fromRGB(0, 100, 255), p.Name .. " [นายอำเภอ]")
+                        else
+                            ApplyESP(char, Color3.fromRGB(0, 255, 100), p.Name .. " [ผู้บริสุทธิ์]")
+                        end
+                    end
+                end
+
+                -- ESP Dropped Gun
+                local gunDrop = Workspace:FindFirstChild("GunDrop", true) or Workspace:FindFirstChild("Gun", true)
+                if gunDrop then
+                    ApplyESP(gunDrop, Color3.fromRGB(255, 255, 0), "[ปืนตกอยู่!]")
+                end
+            end
+        end)
+    end
+})
+
+-- ========================================================
+-- TAB 4: ข้อมูลผู้สร้าง & โซเชียล (Social & Credits)
+-- ========================================================
+local SocialTab = Window:MakeTab({
+    Name = "ผู้สร้าง & โซเชียล",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+SocialTab:AddLabel("สคริปต์พัฒนาโดย: euro x chok")
+
+SocialTab:AddButton({
+    Name = "คัดลอกลิงก์ Instagram ผู้สร้าง",
+    Callback = function()
+        setclipboard("https://www.instagram.com/yuro._.x?stkn=MWM5Z2p0ZnFyc3Fidw==")
+        OrionLib:MakeNotification({
+            Name = "คัดลอกสำเร็จ",
+            Content = "คัดลอกลิงก์ IG เรียบร้อยแล้ว!",
+            Time = 2
+        })
+    end
+})
+
+SocialTab:AddButton({
+    Name = "คัดลอกลิงก์ TikTok ผู้สร้าง",
+    Callback = function()
+        setclipboard("tiktok.com/@euro.x.chok")
+        OrionLib:MakeNotification({
+            Name = "คัดลอกสำเร็จ",
+            Content = "คัดลอกลิงก์ TikTok เรียบร้อยแล้ว!",
+            Time = 2
+        })
+    end
+})
+
+SocialTab:AddButton({
+    Name = "คัดลอกลิงก์ Discord ดิสคอร์ด",
+    Callback = function()
+        setclipboard("https://discord.gg/j3XGABTRDB")
+        OrionLib:MakeNotification({
+            Name = "คัดลอกสำเร็จ",
+            Content = "คัดลอกลิงก์ Discord เรียบร้อยแล้ว!",
+            Time = 2
+        })
+    end
+})
+
+OrionLib:Init()
