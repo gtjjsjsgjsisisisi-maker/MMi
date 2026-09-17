@@ -1,0 +1,169 @@
+import discord
+from discord.ext import commands
+from discord import ui
+import aiohttp
+import cloudscraper
+import asyncio
+
+# --------------------------------------------------
+# ตั้งค่า บอท Discord
+# --------------------------------------------------
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --------------------------------------------------
+# ฟังก์ชั่นช่วยดึงสคริปต์ (สำรองระบบไว้ 2 ช่องทางเพื่อความเสถียร)
+# --------------------------------------------------
+async def fetch_roblox_scripts(query: str):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    # ช่องทางที่ 1: ดึงจาก Rscripts API
+    try:
+        url_rscripts = f"https://rscripts.net/api/v2/scripts?q={query}&page=1"
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url_rscripts, timeout=6) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    scripts = data.get("scripts", [])
+                    if scripts:
+                        results = []
+                        for s in scripts[:10]:
+                            results.append({
+                                "title": s.get("title", "ไม่มีชื่อ"),
+                                "script": s.get("script", "-- ไม่พบโค้ดสคริปต์"),
+                                "key": s.get("key", False),
+                                "game": "Rscripts"
+                            })
+                        return results
+    except Exception:
+        pass  # ถ้าระบบแรกมีปัญหา จะสลับไประบบที่ 2 ทันที
+
+    # ช่องทางที่ 2: ดึงจาก ScriptBlox (ผ่าน cloudscraper เพื่อข้าม Cloudflare)
+    try:
+        def get_scriptblox():
+            scraper = cloudscraper.create_scraper()
+            url_sb = f"https://scriptblox.com/api/script/search?q={query}&max=10"
+            res = scraper.get(url_sb, timeout=8)
+            if res.status_code == 200:
+                return res.json()
+            return None
+
+        data = await asyncio.to_thread(get_scriptblox)
+        if data and "result" in data and "scripts" in data["result"]:
+            results = []
+            for s in data["result"]["scripts"][:10]:
+                game_info = s.get("game", {})
+                g_name = game_info.get("name", "General") if isinstance(game_info, dict) else "General"
+                results.append({
+                    "title": s.get("title", "ไม่มีชื่อ"),
+                    "script": s.get("script", "-- ไม่พบโค้ดสคริปต์"),
+                    "key": s.get("key", False),
+                    "game": g_name
+                })
+            return results
+    except Exception:
+        pass
+
+    return []
+
+# --------------------------------------------------
+# หน้าต่างกรอกชื่อแมพ (Modal)
+# --------------------------------------------------
+class ScriptSearchModal(ui.Modal, title="🔎 ค้นหาสคริปต์ Roblox"):
+    map_name = ui.TextInput(
+        label="ชื่อแมพ หรือชื่อเกม",
+        placeholder="เช่น Blox Fruits, King Legacy, Pet Simulator...",
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        search_query = self.map_name.value.strip()
+
+        # ดึงข้อมูลสคริปต์
+        scripts = await fetch_roblox_scripts(search_query)
+
+        if not scripts:
+            await interaction.followup.send(f"❌ ไม่พบสคริปต์สำหรับแมพ: **{search_query}** หรือระบบค้นหาล่ม", ephemeral=True)
+            return
+
+        # สร้าง Dropdown เมนูเลือกสคริปต์
+        select = ui.Select(placeholder="เลือกสคริปต์ที่ต้องการดู...")
+
+        for i, script in enumerate(scripts):
+            title = script["title"][:45]
+            has_key = "🔑 มีคีย์" if script["key"] else "✅ ไม่มีคีย์"
+            game_name = script["game"][:20]
+
+            select.add_option(
+                label=f"{i+1}. {title}",
+                description=f"เกม: {game_name} | {has_key}",
+                value=str(i)
+            )
+
+        # เมื่อผู้ใช้เลือกรายการจาก Dropdown
+        async def select_callback(select_interaction: discord.Interaction):
+            idx = int(select.values[0])
+            chosen_script = scripts[idx]
+
+            s_title = chosen_script["title"]
+            s_code = chosen_script["script"]
+            is_key = chosen_script["key"]
+            key_status = "🔴 **มีคีย์ (Requires Key)**" if is_key else "🟢 **ไม่มีคีย์ (No Key / Free)**"
+
+            embed = discord.Embed(
+                title=f"📜 {s_title}",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="🔑 สถานะคีย์", value=key_status, inline=False)
+            
+            # ตัดความยาวสคริปต์ไม่ให้เกินโควต้า Discord Embed
+            display_code = s_code if len(s_code) <= 1000 else s_code[:1000] + "\n... (สคริปต์ยาวเกินกำหนด)"
+            embed.add_field(name="💻 สคริปต์ (Lua)", value=f"```lua\n{display_code}\n```", inline=False)
+
+            await select_interaction.response.send_message(embed=embed, ephemeral=True)
+
+        select.callback = select_callback
+        
+        view = ui.View()
+        view.add_item(select)
+
+        embed = discord.Embed(
+            title=f"🔎 ผลการค้นหาสำหรับ: {search_query}",
+            description=f"พบทั้งหมด **{len(scripts)}** สคริปต์ โปรดเลือกรายการด้านล่าง",
+            color=discord.Color.blue()
+        )
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+# --------------------------------------------------
+# ปุ่มกดหลักเปิดหน้าค้นหา
+# --------------------------------------------------
+class MainMenuView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="ค้นหาสคริปต์", style=discord.ButtonStyle.success, emoji="🔎")
+    async def open_search_modal(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(ScriptSearchModal())
+
+# --------------------------------------------------
+# คำสั่งหลัก !โรบูด
+# --------------------------------------------------
+@bot.command(name="โรบูด")
+async def robud(ctx):
+    embed = discord.Embed(
+        title="🤖 ระบบค้นหาสคริปต์ Roblox",
+        description="กดปุ่ม **\"ค้นหาสคริปต์\"** ด้านล่างเพื่อพิมพ์ชื่อแมพที่ต้องการ",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed, view=MainMenuView())
+
+@bot.event
+async def on_ready():
+    print(f"✅ บอทพร้อมใช้งานแล้วในชื่อ: {bot.user.name}")
+
+# ใส่ Token บอทของคุณที่นี่
+bot.run("YOUR_BOT_TOKEN_HERE")
