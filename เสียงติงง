@@ -1,0 +1,359 @@
+-- [[ Script Name: euro x chok | Murder Mystery 2 (Rayfield Version) ]] --
+
+-- 1. เล่นเสียงติ้งทันทีที่รันสคริปต์
+local SoundService = game:GetService("SoundService")
+local Sound = Instance.new("Sound")
+Sound.SoundId = "rbxassetid://4590662766"
+Sound.Volume = 3
+Sound.Parent = SoundService
+Sound:Play()
+
+-- 2. โหลด Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "euro x chok | MM2 HUB",
+   LoadingTitle = "กำลังโหลด euro x chok...",
+   LoadingSubtitle = "by euro x chok",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false
+})
+
+-- ตัวแปรระบบหลัก
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+-- สร้าง แท็บ (Tabs)
+local MainTab = Window:CreateTab("เคลื่อนที่ & ตัวละคร", 4483345998)
+local CombatTab = Window:CreateTab("ระบบต่อสู้ & ล็อกฆาตกร", 4483345998)
+local ESPTab = Window:CreateTab("ระบบมอง (ESP)", 4483345998)
+local SocialTab = Window:CreateTab("ผู้สร้าง & โซเชียล", 4483345998)
+
+-- ========================================================
+-- TAB 1: เคลื่อนที่ & ตัวละคร
+-- ========================================================
+
+-- วิ่งเร็ว
+local WalkSpeedValue = 16
+MainTab:CreateSlider({
+   Name = "วิ่งเร็ว (WalkSpeed)",
+   Range = {16, 200},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 16,
+   Flag = "SpeedSlider",
+   Callback = function(Value)
+      WalkSpeedValue = Value
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+          LocalPlayer.Character.Humanoid.WalkSpeed = WalkSpeedValue
+      end
+   end,
+})
+
+-- กระโดดสูง
+MainTab:CreateSlider({
+   Name = "กระโดดสูง (JumpPower)",
+   Range = {50, 300},
+   Increment = 1,
+   Suffix = "Power",
+   CurrentValue = 50,
+   Flag = "JumpSlider",
+   Callback = function(Value)
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+          LocalPlayer.Character.Humanoid.UseJumpPower = true
+          LocalPlayer.Character.Humanoid.JumpPower = Value
+      end
+   end,
+})
+
+-- เดินชนคนแล้วกระเด็น (Touch Fling)
+local TouchFling = false
+MainTab:CreateToggle({
+   Name = "เดินชนคนแล้วกระเด็น (Touch Fling)",
+   CurrentValue = false,
+   Flag = "FlingToggle",
+   Callback = function(Value)
+      TouchFling = Value
+      task.spawn(function()
+          while TouchFling do
+              task.wait(0.1)
+              local char = LocalPlayer.Character
+              if char and char:FindFirstChild("HumanoidRootPart") then
+                  local hrp = char.HumanoidRootPart
+                  local oldVel = hrp.Velocity
+                  hrp.Velocity = Vector3.new(0, 999999, 0)
+                  RunService.RenderStepped:Wait()
+                  hrp.Velocity = oldVel
+              end
+          end
+      end)
+   end,
+})
+
+-- กันโดนโปรทำให้กระเด็น (Anti-Fling)
+local AntiFling = false
+MainTab:CreateToggle({
+   Name = "กันโดนโปรทำให้กระเด็น (Anti-Fling)",
+   CurrentValue = false,
+   Flag = "AntiFlingToggle",
+   Callback = function(Value)
+      AntiFling = Value
+      task.spawn(function()
+          while AntiFling do
+              task.wait(0.2)
+              for _, player in pairs(Players:GetPlayers()) do
+                  if player ~= LocalPlayer and player.Character then
+                      for _, part in pairs(player.Character:GetChildren()) do
+                          if part:IsA("BasePart") then
+                              part.CanCollide = false
+                          end
+                      end
+                  end
+              end
+          end
+      end)
+   end,
+})
+
+-- ปลดล็อคท่าเต้นทั้งหมด
+MainTab:CreateButton({
+   Name = "ปลดล็อคท่าเต้นทั้งหมด (คนอื่นเห็น)",
+   Callback = function()
+      pcall(function()
+          local EmoteDatabase = require(ReplicatedStorage.Modules.EmoteModule)
+          if EmoteDatabase then
+              Rayfield:Notify({
+                 Title = "สำเร็จ",
+                 Content = "ปลดล็อค Emote เรียบร้อยแล้ว!",
+                 Duration = 3,
+                 Image = 4483345998,
+              })
+          end
+      end)
+   end,
+})
+
+-- ========================================================
+-- TAB 2: ระบบต่อสู้ & ล็อกฆาตกร
+-- ========================================================
+
+-- Swift วาร์ปเก็บปืนอัตโนมัติ
+CombatTab:CreateButton({
+   Name = "Swift วาร์ปเก็บปืนอัตโนมัติ",
+   Callback = function()
+      local gunDrop = Workspace:FindFirstChild("GunDrop", true) or Workspace:FindFirstChild("Gun", true)
+      if gunDrop and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+          LocalPlayer.Character.HumanoidRootPart.CFrame = gunDrop.CFrame
+          Rayfield:Notify({
+             Title = "วาร์ปสำเร็จ",
+             Content = "วาร์ปไปตำแหน่งปืนเรียบร้อยแล้ว!",
+             Duration = 2,
+             Image = 4483345998,
+          })
+      else
+          Rayfield:Notify({
+             Title = "แจ้งเตือน",
+             Content = "ไม่พบปืนที่ตกอยู่ในแมพ!",
+             Duration = 2,
+             Image = 4483345998,
+          })
+      end
+   end,
+})
+
+-- ยิงฆาตกรอัตโนมัติ (ตัวไม่หัน)
+CombatTab:CreateButton({
+   Name = "ปุ่มยิงฆาตกรอัตโนมัติ (กระสุนพุ่งไปเอง ตัวไม่หัน)",
+   Callback = function()
+      local murderer = nil
+      for _, p in pairs(Players:GetPlayers()) do
+          if p ~= LocalPlayer and p.Character then
+              if p.Character:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) then
+                  murderer = p
+                  break
+              end
+          end
+      end
+
+      if murderer and murderer.Character and murderer.Character:FindFirstChild("HumanoidRootPart") then
+          local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+          if gun then
+              LocalPlayer.Character.Humanoid:EquipTool(gun)
+              task.wait(0.05)
+              local targetPosition = murderer.Character.HumanoidRootPart.Position
+              if gun:FindFirstChild("Shoot") then
+                  gun.Shoot:FireServer(targetPosition)
+                  Rayfield:Notify({
+                     Title = "ยิงสำเร็จ",
+                     Content = "ส่งกระสุนไปที่ฆาตกรแล้ว!",
+                     Duration = 2,
+                     Image = 4483345998,
+                  })
+              end
+          else
+              Rayfield:Notify({
+                 Title = "แจ้งเตือน",
+                 Content = "คุณไม่มีปืนในตัว!",
+                 Duration = 2,
+                 Image = 4483345998,
+              })
+          end
+      else
+          Rayfield:Notify({
+             Title = "แจ้งเตือน",
+             Content = "ยังไม่พบฆาตกรในห้อง!",
+             Duration = 2,
+             Image = 4483345998,
+          })
+      end
+   end,
+})
+
+-- ล็อกเป้าฆาตกร
+local LockMurderer = false
+RunService.RenderStepped:Connect(function()
+    if LockMurderer then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                if p.Character:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) then
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, p.Character.HumanoidRootPart.Position)
+                    break
+                end
+            end
+        end
+    end
+end)
+
+CombatTab:CreateToggle({
+   Name = "ล็อกกล้องไปที่ฆาตกร (Lock Murderer)",
+   CurrentValue = false,
+   Flag = "LockMurdererToggle",
+   Callback = function(Value)
+      LockMurderer = Value
+   end,
+})
+
+-- ========================================================
+-- TAB 3: ระบบมอง ESP
+-- ========================================================
+
+local ESPEnabled = false
+
+local function ApplyESP(model, color, labelText)
+    if not model:FindFirstChild("ESP_Highlight") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "ESP_Highlight"
+        hl.FillColor = color
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.FillTransparency = 0.4
+        hl.Parent = model
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "ESP_Tag"
+        bb.Size = UDim2.new(0, 100, 0, 30)
+        bb.AlwaysOnTop = true
+        bb.Adornee = model:FindFirstChild("Head") or model
+        bb.Parent = model
+
+        local txt = Instance.new("TextLabel")
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.BackgroundTransparency = 1
+        txt.TextColor3 = color
+        txt.TextScaled = true
+        txt.Font = Enum.Font.SourceSansBold
+        txt.Text = labelText
+        txt.Parent = bb
+    end
+end
+
+ESPTab:CreateToggle({
+   Name = "เปิดระบบมอง (ผู้บริสุทธิ์/นายอำเภอ/ฆาตกร/ปืน/ชื่อบนหัว)",
+   CurrentValue = false,
+   Flag = "ESPMasterToggle",
+   Callback = function(Value)
+      ESPEnabled = Value
+      task.spawn(function()
+          while ESPEnabled do
+              task.wait(1)
+              for _, p in pairs(Players:GetPlayers()) do
+                  if p ~= LocalPlayer and p.Character then
+                      local char = p.Character
+                      local isMurderer = char:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife"))
+                      local isSheriff = char:FindFirstChild("Gun") or (p.Backpack and p.Backpack:FindFirstChild("Gun"))
+
+                      if isMurderer then
+                          ApplyESP(char, Color3.fromRGB(255, 0, 0), p.Name .. "\n[ฆาตกร]")
+                      elseif isSheriff then
+                          ApplyESP(char, Color3.fromRGB(0, 100, 255), p.Name .. "\n[นายอำเภอ]")
+                      else
+                          ApplyESP(char, Color3.fromRGB(0, 255, 100), p.Name .. "\n[ผู้บริสุทธิ์]")
+                      end
+                  end
+              end
+
+              local gunDrop = Workspace:FindFirstChild("GunDrop", true) or Workspace:FindFirstChild("Gun", true)
+              if gunDrop then
+                  ApplyESP(gunDrop, Color3.fromRGB(255, 255, 0), "[ปืนตกอยู่!]")
+              end
+          end
+      end)
+   end,
+})
+
+-- ========================================================
+-- TAB 4: ผู้สร้าง & โซเชียล
+-- ========================================================
+
+SocialTab:CreateSection("ข้อมูลผู้พัฒนา")
+
+SocialTab:CreateButton({
+   Name = "คัดลอกลิงก์ Instagram ผู้สร้าง",
+   Callback = function()
+      setclipboard("https://www.instagram.com/your_instagram")
+      Rayfield:Notify({
+         Title = "คัดลอกสำเร็จ",
+         Content = "คัดลอกลิงก์ Instagram แล้ว!",
+         Duration = 2,
+         Image = 4483345998,
+      })
+   end,
+})
+
+SocialTab:CreateButton({
+   Name = "คัดลอกลิงก์ TikTok ผู้สร้าง",
+   Callback = function()
+      setclipboard("https://www.tiktok.com/@your_tiktok")
+      Rayfield:Notify({
+         Title = "คัดลอกสำเร็จ",
+         Content = "คัดลอกลิงก์ TikTok แล้ว!",
+         Duration = 2,
+         Image = 4483345998,
+      })
+   end,
+})
+
+SocialTab:CreateButton({
+   Name = "คัดลอกลิงก์ Discord ดิสคอร์ด",
+   Callback = function()
+      setclipboard("https://discord.gg/your_discord")
+      Rayfield:Notify({
+         Title = "คัดลอกสำเร็จ",
+         Content = "คัดลอกลิงก์ Discord แล้ว!",
+         Duration = 2,
+         Image = 4483345998,
+      })
+   end,
+})
+
+-- แจ้งเตือนเมื่อโหลดเสร็จ
+Rayfield:Notify({
+   Title = "euro x chok | MM2 HUB",
+   Content = "โหลดระบบเรียบร้อยพร้อมใช้งาน!",
+   Duration = 4,
+   Image = 4483345998,
+})
